@@ -3,6 +3,8 @@ package com.welcommu.moduleservice.user;
 import static com.welcommu.modulecommon.exception.CustomErrorCode.NOT_FOUND_COMPANY;
 import static com.welcommu.modulecommon.exception.CustomErrorCode.NOT_FOUND_USER;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.welcommu.modulecommon.exception.CustomErrorCode;
 import com.welcommu.modulecommon.exception.CustomException;
 import com.welcommu.moduledomain.company.Company;
@@ -15,6 +17,7 @@ import com.welcommu.moduleservice.user.dto.UserSnapshot;
 import com.welcommu.moduleservice.user.dto.UserModifyRequest;
 import com.welcommu.moduleservice.user.dto.UserRequest;
 import com.welcommu.moduleservice.user.dto.UserResponse;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.util.stream.Collectors;
@@ -36,6 +40,8 @@ public class UserServiceImpl implements UserService{
     private final PasswordEncoder passwordEncoder;
     private final CompanyRepository companyRepository;
     private final UserAuditService userAuditService;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public void createUser(UserRequest request, Long creatorId) {
@@ -46,22 +52,54 @@ public class UserServiceImpl implements UserService{
         userAuditService.createAuditLog(UserSnapshot.from(savedUser), creatorId);
     }
 
+    @Transactional
     public UserResponse modifyUser(Long id, Long creatorId, UserModifyRequest request) {
-        User existingUser = userRepository.findById(id).orElseThrow(() -> new CustomException(CustomErrorCode.NOT_FOUND_USER));
-        Company company = findCompany(request.getCompanyId());
+        try {
+            log.info("사용자 수정 시작 - id: {}, request: {}", id, request);
 
-        // auditLog 기록을 위해 수정 전 데이터로 구성된 객체를 생성
-        UserSnapshot beforeSnapshot = UserSnapshot.from(existingUser);
+            // 1. Redis에서 Idempotency Key 확인
+            String resultKey = "user:modify:" + request.getIdempotencyKey();
+            String cachedResult = redisTemplate.opsForValue().get(resultKey);
 
-        request.modifyUser(existingUser, company);
-        User savedUser = userRepository.save(existingUser);
+            if (cachedResult != null) {
+                log.info("캐시된 결과 반환 - id: {}", id);
+                return objectMapper.readValue(cachedResult, UserResponse.class);
+            }
 
-        // auditLog 기록을 위해 수정 후 데이터로 구성된 객체를 생성
-        UserSnapshot afterSnapshot = UserSnapshot.from(savedUser);
+            // 2. 사용자와 회사 조회
+            User existingUser = userRepository.findById(id)
+                .orElseThrow(() -> new CustomException(CustomErrorCode.NOT_FOUND_USER));
+            log.info("기존 사용자 조회 완료 - id: {}, name: {}", id, existingUser.getName());
 
-        // auditLog 기록을 위해 수정 전, 후 객체를 바탕으로 audit_log 기록
-        userAuditService.modifyAuditLog(beforeSnapshot, afterSnapshot,creatorId);
-        return UserResponse.from(savedUser);
+            Company company = findCompany(request.getCompanyId());
+            log.info("회사 조회 완료 - companyId: {}", request.getCompanyId());
+
+            // 3. 수정 전 스냅샷
+            UserSnapshot beforeSnapshot = UserSnapshot.from(existingUser);
+
+            // 4. 사용자 정보 수정
+            request.modifyUser(existingUser, company);
+            User savedUser = userRepository.save(existingUser);
+            log.info("사용자 정보 수정 완료 - id: {}", id);
+
+            // 5. 수정 후 스냅샷 및 감사 로그
+            UserSnapshot afterSnapshot = UserSnapshot.from(savedUser);
+            userAuditService.modifyAuditLog(beforeSnapshot, afterSnapshot, creatorId);
+            log.info("감사 로그 기록 완료 - id: {}", id);
+
+            // 6. 결과 캐싱
+            UserResponse response = UserResponse.from(savedUser);
+            redisTemplate.opsForValue().set(
+                resultKey,
+                objectMapper.writeValueAsString(response),
+                Duration.ofMinutes(30)
+            );
+            log.info("결과 캐싱 완료 - id: {}", id);
+
+            return response;
+        } catch (JsonProcessingException e) {
+            throw new CustomException(CustomErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 
     public Company findCompany(Long request) {

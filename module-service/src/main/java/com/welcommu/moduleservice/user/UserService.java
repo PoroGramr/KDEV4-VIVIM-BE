@@ -1,5 +1,6 @@
 package com.welcommu.moduleservice.user;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.welcommu.moduledomain.company.Company;
 import com.welcommu.moduledomain.company.CompanyRole;
 import com.welcommu.moduledomain.user.User;

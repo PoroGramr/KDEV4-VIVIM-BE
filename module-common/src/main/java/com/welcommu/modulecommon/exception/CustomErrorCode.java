@@ -63,7 +63,10 @@ public enum CustomErrorCode {
     NOT_FOUND_INQUIRY_COMMENT("I002", "답변을 찾을 수 없습니다."),
 
     // Concurrency
-    CONCURRENT_UPDATE("CO001", "다른 사용자가 먼저 저장했습니다. 다시 시도해주세요.");
+    CONCURRENT_UPDATE("CO001", "다른 사용자가 먼저 저장했습니다. 다시 시도해주세요."),
+    INTERNAL_SERVER_ERROR("C0002","멱등성 보장 실패");
+
+
 
     private final String code;
     private final String errorMessage;
