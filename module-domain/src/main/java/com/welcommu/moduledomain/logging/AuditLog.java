@@ -37,6 +37,7 @@ public class AuditLog {
     private LocalDateTime loggedAt;
 
     @Builder.Default
+    @org.hibernate.annotations.BatchSize(size = 100)
     @OneToMany(mappedBy = "auditLog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AuditLogDetail> details = new ArrayList<>();
 

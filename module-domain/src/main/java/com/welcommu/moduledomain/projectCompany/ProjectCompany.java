@@ -14,7 +14,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Setter
 @Entity
 @Table(name = "project_company")
 @Getter
@@ -35,15 +37,4 @@ public class ProjectCompany {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public void setProject(Project project) {
-        this.project = project;
-    }
-
-    public void setCompany(Company company) {
-        this.company = company;
-    }
 }
