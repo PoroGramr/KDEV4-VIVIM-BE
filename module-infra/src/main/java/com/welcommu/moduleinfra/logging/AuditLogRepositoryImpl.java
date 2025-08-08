@@ -30,7 +30,7 @@ public class AuditLogRepositoryImpl implements AuditLogRepositoryCustom {
         Long userId,
         Pageable pageable
     ) {
-        StringBuilder jpql = new StringBuilder("SELECT DISTINCT a FROM AuditLog a LEFT JOIN FETCH a.details WHERE 1=1");
+        StringBuilder jpql = new StringBuilder("SELECT DISTINCT a FROM AuditLog a WHERE 1=1");
         StringBuilder countJpql = new StringBuilder("SELECT COUNT(DISTINCT a) FROM AuditLog a WHERE 1=1");
         Map<String, Object> params = new HashMap<>();
 
