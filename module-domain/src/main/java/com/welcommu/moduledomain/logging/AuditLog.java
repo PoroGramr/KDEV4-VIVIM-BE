@@ -37,6 +37,7 @@ public class AuditLog {
 
     @Builder.Default
     @OneToMany(mappedBy = "auditLog", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.BatchSize(size = 100)
     private List<AuditLogDetail> details = new ArrayList<>();
 
     public void addDetail(String fieldName, String oldValue, String newValue) {
